@@ -1,5 +1,5 @@
 {
-    "exp_name": "hgn_vanilla_128",
+    "exp_name": "10_12_hgn_vanilla_128_wihtHGN",
     "model_type": "roberta",
     "encoder_name_or_path": "roberta-base",
     "num_train_epochs": 1,

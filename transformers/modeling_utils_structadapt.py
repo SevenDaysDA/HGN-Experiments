@@ -509,8 +509,11 @@ class PreTrainedModel(nn.Module):
             load(model_to_load, prefix=start_prefix)
             if len(missing_keys) > 0:
                 logger.info(
-                    "Weights of {} not initialized from pretrained model: {}".format(
-                        model.__class__.__name__, missing_keys
+                    # "Weights of {} not initialized from pretrained model: {}".format(
+                    #     model.__class__.__name__, missing_keys
+                    # )
+                    "Weights of {} not initialized from pretrained model: ".format(
+                        model.__class__.__name__
                     )
                 )
             if len(unexpected_keys) > 0:

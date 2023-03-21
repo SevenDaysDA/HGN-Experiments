@@ -191,8 +191,8 @@ class MultiModalStructAdaptRobertaGated_v4(nn.Module):
 
         q_dim = self.hidden_dim if config.q_update else config.input_dim
         self.predict_layer = PredictionLayer(config, q_dim)
-        self.predict_layer_sent_mlp = OutputLayer(config.adapter_size*2, config, num_answer=1)
-        self.predict_layer_entity_mlp = OutputLayer(config.adapter_size*2, config, num_answer=1)
+        self.predict_layer_sent_mlp = OutputLayer(config.hgn_hidden_size*2, config, num_answer=1)
+        self.predict_layer_entity_mlp = OutputLayer(config.hgn_hidden_size*2, config, num_answer=1)
 
 
     def forward(
@@ -251,23 +251,23 @@ class MultiModalStructAdaptRobertaGated_v4(nn.Module):
                 start, end, q_type = predictions
                 return start, end, q_type, para_prediction, sent_prediction, ent_prediction
 
-            
-
-
 class OutputLayer(nn.Module):
     def __init__(self, hidden_dim, config, num_answer=1):
         super(OutputLayer, self).__init__()
-
+        # hidden dim = input for OutputLayer
+        # proj_hidden_dim = hidden dim for Outputlayer
+        self.proj_hidden_dim = config.ctx_attn_hidden_dim
+        self.projectionlayer_in = nn.Linear(hidden_dim, self.proj_hidden_dim)
         self.output = nn.Sequential(
-            nn.Linear(hidden_dim, hidden_dim*2),
+            nn.Linear(self.proj_hidden_dim, self.proj_hidden_dim*2),
             nn.ReLU(),
-            BertLayerNorm(hidden_dim*2, eps=1e-12),
+            BertLayerNorm(self.proj_hidden_dim*2, eps=1e-12),
             nn.Dropout(config.trans_drop),
-            nn.Linear(hidden_dim*2, num_answer),
+            nn.Linear(self.proj_hidden_dim*2, num_answer),
         )
 
     def forward(self, hidden_states):
-        return self.output(hidden_states)
+        return self.output(self.projectionlayer_in(hidden_states))
 
 class PredictionLayer(nn.Module):
     """

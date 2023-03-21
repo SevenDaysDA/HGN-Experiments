@@ -17,7 +17,7 @@
 
 
 import logging
-
+# import ipdb
 import torch
 import torch.nn as nn
 from torch.nn import CrossEntropyLoss, MSELoss
@@ -186,6 +186,43 @@ class RobertaModelAdapter(BertModel):
     def set_input_embeddings(self, value):
         self.embeddings.word_embeddings = value
 
+
+
+
+
+class Roberta_vanill_adapter(nn.Module):
+    def __init__(self, config):
+        super(Roberta_vanill_adapter, self).__init__()    
+        self.encoder = RobertaModelAdapter.from_pretrained(config.encoder_name_or_path, adapter_size=config.adapter_size)
+
+    def forward(
+            self,
+            batch=None,
+            input_ids=None,
+            attention_mask=None,
+            token_type_ids=None,
+            position_ids=None,
+            head_mask=None,
+            inputs_embeds=None,
+            return_yp=True,
+        ):
+            r"""
+            start_positions (`torch.LongTensor` of shape `(batch_size,)`, *optional*):
+                Labels for position (index) of the start of the labelled span for computing the token classification loss.
+                Positions are clamped to the length of the sequence (`sequence_length`). Position outside of the sequence
+                are not taken into account for computing the loss.
+            end_positions (`torch.LongTensor` of shape `(batch_size,)`, *optional*):
+                Labels for position (index) of the end of the labelled span for computing the token classification loss.
+                Positions are clamped to the length of the sequence (`sequence_length`). Position outside of the sequence
+                are not taken into account for computing the loss.
+            """
+            # 1) get transformer token embeddings
+            batch['context_encoding'] = self.encoder(
+                input_ids=batch['context_idxs'],
+                attention_mask=batch['context_mask']
+            )[0]
+            batch['context_mask'] = batch['context_mask'].float().to('cuda')
+            return self.encoder(input_ids=batch['context_idxs'],attention_mask=batch['context_mask']).float().to('cuda')
 
 class VanillaAdapter_HGN_v2(nn.Module):
     def __init__(self, config):
@@ -490,6 +527,7 @@ class BertLayerNorm(nn.Module):
         return self.weight * x + self.bias
 
 
+
 class OutputLayer(nn.Module):
     def __init__(self, hidden_dim, config, num_answer=1):
         super(OutputLayer, self).__init__()
@@ -505,11 +543,33 @@ class OutputLayer(nn.Module):
     def forward(self, hidden_states):
         return self.output(hidden_states)
 
+
+# class OutputLayer(nn.Module):
+#     def __init__(self, hidden_dim, config, num_answer=1):
+#         super(OutputLayer, self).__init__()
+#         # hidden dim = input for OutputLayer
+#         # proj_hidden_dim = hidden dim for Outputlayer
+#         self.proj_hidden_dim = config.ctx_attn_hidden_dim
+#         # self.proj_hidden_dim = config.hidden_dim
+#         self.projectionlayer_in = nn.Linear(hidden_dim, self.proj_hidden_dim)
+#         self.output = nn.Sequential(
+#             nn.Linear(self.proj_hidden_dim, self.proj_hidden_dim*2),
+#             nn.ReLU(),
+#             BertLayerNorm(self.proj_hidden_dim*2, eps=1e-12),
+#             nn.Dropout(config.trans_drop),
+#             nn.Linear(self.proj_hidden_dim*2, num_answer),
+#         )
+
+#     def forward(self, hidden_states):
+#         return self.output(self.projectionlayer_in(hidden_states))
+
 class GraphBlock(nn.Module):
     def __init__(self, q_attn, config):
         super(GraphBlock, self).__init__()
         self.config = config
         self.hidden_dim = config.hidden_dim
+
+        # self.projectionlayer = nn.Linear(self.hidden_dim, self.proj_hidden_dim)
 
         if self.config.q_update:
             self.gat_linear = nn.Linear(self.hidden_dim*2, self.hidden_dim)
@@ -742,9 +802,14 @@ class PredictionLayer(nn.Module):
         super(PredictionLayer, self).__init__()
         self.config = config
         input_dim = config.ctx_attn_hidden_dim
-        h_dim = config.hidden_dim
+        # input_dim = config.hidden_dim
+        # h_dim = config.hidden_dim
 
-        self.hidden = h_dim
+        # Bigger Head:
+        # input_dim = h_dim
+        # self.hidden = h_dim
+
+        # self.projectionlayer = nn.Linear(self.hidden_dim, self.proj_hidden_dim)
 
         self.start_linear = OutputLayer(input_dim, config, num_answer=1)
         self.end_linear = OutputLayer(input_dim, config, num_answer=1)

@@ -253,21 +253,38 @@ class MultiModal_Roberta_v4_unbalanced(nn.Module):
 
             
 
-
 class OutputLayer(nn.Module):
     def __init__(self, hidden_dim, config, num_answer=1):
         super(OutputLayer, self).__init__()
-
+        # hidden dim = input for OutputLayer
+        # proj_hidden_dim = hidden dim for Outputlayer
+        self.proj_hidden_dim = config.ctx_attn_hidden_dim
+        self.projectionlayer_in = nn.Linear(hidden_dim, self.proj_hidden_dim)
         self.output = nn.Sequential(
-            nn.Linear(hidden_dim, hidden_dim*2),
+            nn.Linear(self.proj_hidden_dim, self.proj_hidden_dim*2),
             nn.ReLU(),
-            BertLayerNorm(hidden_dim*2, eps=1e-12),
+            BertLayerNorm(self.proj_hidden_dim*2, eps=1e-12),
             nn.Dropout(config.trans_drop),
-            nn.Linear(hidden_dim*2, num_answer),
+            nn.Linear(self.proj_hidden_dim*2, num_answer),
         )
 
     def forward(self, hidden_states):
-        return self.output(hidden_states)
+        return self.output(self.projectionlayer_in(hidden_states))
+
+# class OutputLayer(nn.Module):
+#     def __init__(self, hidden_dim, config, num_answer=1):
+#         super(OutputLayer, self).__init__()
+
+#         self.output = nn.Sequential(
+#             nn.Linear(hidden_dim, hidden_dim*2),
+#             nn.ReLU(),
+#             BertLayerNorm(hidden_dim*2, eps=1e-12),
+#             nn.Dropout(config.trans_drop),
+#             nn.Linear(hidden_dim*2, num_answer),
+#         )
+
+#     def forward(self, hidden_states):
+#         return self.output(hidden_states)
 
 class PredictionLayer(nn.Module):
     """

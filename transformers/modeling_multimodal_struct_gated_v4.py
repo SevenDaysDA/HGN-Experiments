@@ -400,7 +400,7 @@ class StructAdapt(nn.Module):
         self.layer_norm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
         self.project_layer = nn.Linear(config.hidden_size, config.adapter_size, bias=False)
         hgn_new_config = copy.deepcopy(hgn_config)
-        hgn_new_config.hidden_dim = config.adapter_size
+        # hgn_new_config.hidden_dim = config.adapter_size
         
         self.hgn = HierarchicalGraphNetwork(hgn_new_config)
 
@@ -432,7 +432,6 @@ class GatedAttention(nn.Module):
         bsz, input_len, memory_len = input.size(0), input.size(1), memory.size(1)
 
         input_dot = F.relu(self.input_linear_1(input))  # N x Ld x d
-
         memory_dot = F.relu(self.memory_linear_1(memory))  # N x Lm x d
 
         # N * Ld * Lm
@@ -455,7 +454,6 @@ class GatedAttention(nn.Module):
             output = gate_sg * gate_th
         else:
             raise ValueError("Not support gate method: {}".format(self.gate_method))
-
 
         return output
     
@@ -481,7 +479,7 @@ class BiModalAdapter(nn.Module):
         
     def forward(self, hidden_states_text, hidden_states_graph, batch):
         layer_output_text = self.adapter_text(hidden_states_text) # text adapter
-        
+
         graph_out_dict = self.adapter_graph(hidden_states_graph, batch) # graph adapter    
 
         layer_output = self.adapter_fusing_layer(layer_output_text,
@@ -515,10 +513,7 @@ class BertLayer(nn.Module):
         config_adapters.intermediate_size = config.adapter_size
 
         self.adapter_text_bottom = Adapter(config_adapters)
-        self.adapter_graph_bottom = Adapter(config_adapters)
 
-
-        self.adapter_graph_top = StructAdapt(config, hgn_config)
         self.adapter_text_top = nn.Sequential(
                                         nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps),
                                         nn.Linear(config.hidden_size, config_adapters.intermediate_size, bias=False),
@@ -528,14 +523,17 @@ class BertLayer(nn.Module):
                                         nn.Dropout(config.hidden_dropout_prob))
 
 
-
-        self.adapter_gated_attention = GatedAttention(input_dim=config_adapters.intermediate_size,
+        config_adapters.intermediate_size = hgn_config.hidden_dim
+        self.adapter_graph_bottom = Adapter(config_adapters)
+        self.adapter_graph_top = StructAdapt(config_adapters, hgn_config)
+        self.adapter_gated_attention = GatedAttention(input_dim=config.adapter_size, #config_adapters.intermediate_size,
                                         memory_dim=config_adapters.intermediate_size if hgn_config.q_update else config_adapters.intermediate_size*2,
                                         hid_dim=config_adapters.intermediate_size,
                                         dropout=hgn_config.bi_attn_drop,
                                         gate_method=hgn_config.ctx_attn)
         
-        self.adapter_projection = nn.Linear(config_adapters.intermediate_size, config.hidden_size, bias=False)
+        self.adapter_projection_graph = nn.Linear(config_adapters.intermediate_size, config.hidden_size, bias=False)
+        self.adapter_projection_text = nn.Linear(config.adapter_size, config.hidden_size, bias=False)
         self.adapter_dropout = nn.Dropout(config.hidden_dropout_prob)
         
 
@@ -558,10 +556,8 @@ class BertLayer(nn.Module):
 
         # Textual Outputs
         self_attention_outputs_text = self.attention(text_hidden_states, attention_mask, head_mask)
-        del text_hidden_states
         attention_output_text = self_attention_outputs_text[0]
         outputs_text = self_attention_outputs_text[1:]  # add self attentions if we output attention weights
-        del self_attention_outputs_text
 
         if self.is_decoder and encoder_hidden_states is not None:
             cross_attention_outputs_text = self.crossattention(
@@ -572,10 +568,10 @@ class BertLayer(nn.Module):
 
         # Graphical Outputs
         self_attention_outputs_graph = self.attention(graph_hidden_states, attention_mask, head_mask)
-        del graph_hidden_states
+        # del graph_hidden_states
         attention_output_graph = self_attention_outputs_graph[0]
         outputs_graph = self_attention_outputs_graph[1:]  # add self attentions if we output attention weights
-        del self_attention_outputs_graph
+        # del self_attention_outputs_graph
 
         if self.is_decoder and encoder_hidden_states is not None:
             cross_attention_outputs_graph = self.crossattention(
@@ -612,23 +608,21 @@ class BertLayer(nn.Module):
         gated_output_graph = self.adapter_gated_attention(layer_output_text_bi,
                                                  graph_out_dict['graph_state'],
                                                  graph_out_dict['node_mask'].squeeze(-1)) # fusing layer
-        gated_output_graph = self.adapter_dropout(self.adapter_projection(gated_output_graph)) # Inverted Btle-neck layer
+        gated_output_graph = self.adapter_dropout(self.adapter_projection_graph(gated_output_graph)) # Inverted Btle-neck layer
         
-
-        layer_output_text_bi_correct_size = self.adapter_dropout(self.adapter_projection(layer_output_text_bi)) # Inverted Bottle-neck layer
-        del layer_output_text_bi   
+        # import ipdb; ipdb.set_trace()
+        layer_output_text_bi_correct_size = self.adapter_dropout(self.adapter_projection_text(layer_output_text_bi)) # Inverted Bottle-neck layer
+        # del layer_output_text_bi   
 
         # ipdb.set_trace()
         # Also try out without res connection
         layer_output = gated_output_graph + layer_output_graph # residual connection
-        del layer_output_graph
 
 
         # Try old way, if this works
         outputs_text = (layer_output_text_bi_correct_size,) + outputs_text
-        outputs_graph = (gated_output_graph,) + outputs_graph
-        del layer_output_text_bi_correct_size
-        del gated_output_graph
+        outputs_graph = (layer_output,) + outputs_graph
+
 
         return (outputs_text, outputs_graph, graph_out_dict)
 

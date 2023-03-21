@@ -180,8 +180,11 @@ if is_torch_available():
         MultiModal_Roberta_v4_unbalanced,
     )
     from .modeling_adapter_vanilla_hgn_v2 import (
-        VanillaAdapter_HGN_v2,
+        VanillaAdapter_HGN_v2, Roberta_vanill_adapter
     )
+    from .modeling_adapter_vanilla_roberta import (
+        RobertaModelAdapter, RobertaModelAdapter4HotpotQA, RobertaModelAdapter4QA
+    )    
     # from .modeling_structadapt_roberta import (
     #     StructAdaptRoberta,
     # )
@@ -214,7 +217,23 @@ if is_torch_available():
     )
     from .modeling_structadapt_multimodal_fast_roberta_v2 import (
         MultiModalStructAdaptFastRoberta_v2,
+    )    
+    from .modeling_structadapt_multimodal_fast_roberta_v2_woBoAd import (
+        MultiModalStructAdaptFastRoberta_v2_woBoAd,
     )
+    from .modeling_structadapt_multimodal_fast_roberta_v2_woBoAd_wt import (
+        MultiModalStructAdaptFastRoberta_v2_woBoAd_wt,
+    )    
+    from .modeling_structadapt_multimodal_fast_roberta_v2_skipIB import (
+        MultiModalStructAdaptFastRoberta_v2_skipIB,
+    )    
+    from .modeling_structadapt_multimodal_fast_roberta_v2_alter import (
+        MultiModalStructAdaptFastRoberta_v2_alter,
+    )
+    from .modeling_structadapt_multimodal_fast_roberta_v2_sum import (
+        MultiModalStructAdaptFastRoberta_v2_sum,
+    )    
+
     # from Multimodal.modeling_multimodal_adapter_roberta import (
     #     MultiModalAdapterRoberta,
     # )
